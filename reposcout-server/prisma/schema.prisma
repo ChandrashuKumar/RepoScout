@@ -1,15 +1,63 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
   provider = "postgresql"
+  extensions = [vector]
 }
 
+enum RepoStatus {
+  PENDING
+  INGESTING
+  COMPLETED
+  FAILED
+}
+
+
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String?
-  githubId     String?  @unique
-  createdAt    DateTime @default(now())
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String?
+  githubId      String?  @unique
+  createdAt     DateTime @default(now())
+
+  repositories  Repository[]
+}
+
+model Repository{
+  id          String      @id @default(uuid())
+  url         String
+  name        String
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  createdAt   DateTime    @default(now())
+  status      RepoStatus  @default(PENDING)
+
+  files       RepoFile[]
+}
+
+model RepoFile{
+  id          String      @id @default(uuid())
+  filePath    String
+  repoId      String
+
+  repository  Repository  @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  chunks      CodeChunk[]
+}
+
+model CodeChunk{
+  id            String    @id @default(uuid())
+  fileId        String
+  file          RepoFile  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  startLine     Int
+  endLine       Int
+  content       String
+
+  vector        Unsupported("vector(384)")?
+
+  createdAt    DateTime               @default(now())
 }

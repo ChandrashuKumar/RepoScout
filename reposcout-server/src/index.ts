@@ -3,11 +3,12 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import session from 'express-session';
 import passport from 'passport';
+import path from 'path';
+import fs from 'fs-extra';
 
 // Load environment variables
 dotenv.config();
 
-// Import passport config (must be after dotenv)
 import './lib/passport';
 
 // Import routes
@@ -18,6 +19,8 @@ import qaRoutes from './routes/qaRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 5555;
+
+app.set("trust proxy", 1);
 
 // CORS configuration
 app.use(cors({
@@ -57,7 +60,21 @@ app.use('/api/repos', repoRoutes);
 app.use('/api/ingest', ingestRoutes);
 app.use('/api/chat', qaRoutes);
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+// Cleanup temp directory on startup
+const cleanupTempDir = async () => {
+  const tempPath = path.join(__dirname, '../temp');
+  try {
+    await fs.ensureDir(tempPath);
+    await fs.emptyDir(tempPath);
+    console.log(`[Server] Temp directory cleared: ${tempPath}`);
+  } catch (error) {
+    console.error('[Server] Temp cleanup failed:', error);
+  }
+};
+
+// Start server after cleanup
+cleanupTempDir().then(() => {
+  app.listen(PORT, () => {
+    console.log(`[Server] Running on port ${PORT}`);
+  });
 });

@@ -14,6 +14,7 @@ import './lib/passport';
 import authRoutes from './routes/authRoutes';
 import repoRoutes from './routes/repoRoutes';
 import ingestRoutes from './routes/ingestRoutes';
+import qaRoutes from './routes/qaRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 5555;
@@ -54,6 +55,7 @@ app.get('/api/health', (req: Request, res: Response) => {
 app.use('/auth', authRoutes);
 app.use('/api/repos', repoRoutes);
 app.use('/api/ingest', ingestRoutes);
+app.use('/api/chat', qaRoutes);
 
 // Start server
 app.listen(PORT, () => {

@@ -29,7 +29,7 @@ export const register = async (req: Request, res: Response): Promise<any> => {
     const token = jwt.sign(
       { userId: user.id, email: user.email },
       process.env.JWT_SECRET || 'secret',
-      { expiresIn: '24h' }
+      { expiresIn: '7d' }
     );
 
     res.status(201).json({
@@ -59,7 +59,7 @@ export const login = async (req: Request, res: Response): Promise<any> => {
     const token = jwt.sign(
       { userId: user.id, email: user.email },
       process.env.JWT_SECRET || 'secret',
-      { expiresIn: '24h' }
+      { expiresIn: '7d' }
     );
 
     res.json({

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAppStore } from "@/store/useAppStore";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, User, Code2, ChevronRight, Loader2, FileText, Sparkles } from "lucide-react";
+import { Send, User, Code2, ChevronRight, Loader2, FileText, Sparkles, Download } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,32 @@ export default function ChatPanel({ repoId }: ChatPanelProps) {
         }
     };
 
+    const handleExportChat = () => {
+        if (chatHistory.length === 0) return;
+
+        const markdown = chatHistory.map((msg) => {
+            const sender = msg.sender === 'user' ? '**You**' : '**Assistant**';
+            let content = `${sender}:\n${msg.message}`;
+
+            if (msg.sources && msg.sources.length > 0) {
+                content += '\n\n*References:*\n';
+                msg.sources.forEach((source) => {
+                    content += `- \`${source.filePath}\` (Lines ${source.startLine}-${source.endLine})\n`;
+                });
+            }
+
+            return content;
+        }).join('\n\n---\n\n');
+
+        const blob = new Blob([markdown], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chat-export-${new Date().toISOString().slice(0, 10)}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <div className="flex flex-col h-full w-full bg-[#0a0f1e] border-r border-slate-700/50 relative z-20">
            
@@ -77,33 +103,45 @@ export default function ChatPanel({ repoId }: ChatPanelProps) {
                         </div>
                     </div>
                 </div>
-                <ButtonGroup className="border border-slate-700 rounded-lg overflow-hidden">
+                <div className="flex items-center gap-2">
+                    <ButtonGroup className="border border-slate-700 rounded-lg overflow-hidden">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedLlm('gemini')}
+                            className={`rounded-none border-0 px-3 py-1.5 text-xs font-medium transition-all ${
+                                selectedLlm === 'gemini'
+                                    ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                            }`}
+                        >
+                            Gemini
+                        </Button>
+                        <div className="w-px bg-slate-700" />
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedLlm('groq')}
+                            className={`rounded-none border-0 px-3 py-1.5 text-xs font-medium transition-all ${
+                                selectedLlm === 'groq'
+                                    ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                            }`}
+                        >
+                            Groq
+                        </Button>
+                    </ButtonGroup>
                     <Button
                         variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedLlm('gemini')}
-                        className={`rounded-none border-0 px-3 py-1.5 text-xs font-medium transition-all ${
-                            selectedLlm === 'gemini'
-                                ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50'
-                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                        }`}
+                        size="icon"
+                        onClick={handleExportChat}
+                        disabled={chatHistory.length === 0}
+                        className="h-8 w-8 bg-slate-800/50 border border-slate-700 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/50 hover:bg-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        aria-label="Export chat"
                     >
-                        Gemini
+                        <Download size={14} />
                     </Button>
-                    <div className="w-px bg-slate-700" />
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSelectedLlm('groq')}
-                        className={`rounded-none border-0 px-3 py-1.5 text-xs font-medium transition-all ${
-                            selectedLlm === 'groq'
-                                ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50'
-                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
-                        }`}
-                    >
-                        Groq
-                    </Button>
-                </ButtonGroup>
+                </div>
             </div>
 
             

@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAppStore } from '@/store/useAppStore';
 import { repoApi } from '@/services/api';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { FileCode, Copy, Check, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 
@@ -17,6 +16,8 @@ export const CodeViewer = () => {
     const [isCopied, setIsCopied] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const codeContainerRef = useRef<HTMLDivElement>(null);
+
     useEffect(() => {
         const fetchCode = async () => {
             if (!selectedNodeId || !reactFlowInstance) return;
@@ -25,8 +26,8 @@ export const CodeViewer = () => {
             const dbId = node?.data?.dbId;
 
             if (!dbId) {
-                
                 setCode(null);
+                setError("This is a folder, not a file.");
                 return;
             }
 
@@ -47,6 +48,23 @@ export const CodeViewer = () => {
 
         fetchCode();
     }, [selectedNodeId, reactFlowInstance]);
+
+    // Auto-scroll to highlighted lines when highlight changes
+    useEffect(() => {
+        if (currentHighlight && code && codeContainerRef.current) {
+            setTimeout(() => {
+                // With wrapLines={true}, each line is a span with display:block inside pre > code
+                const codeElement = codeContainerRef.current?.querySelector('code');
+                if (codeElement) {
+                    const lineSpans = codeElement.children;
+                    const targetLine = lineSpans[currentHighlight.startLine - 1] as HTMLElement;
+                    if (targetLine) {
+                        targetLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+            }, 150);
+        }
+    }, [currentHighlight, code]);
 
     const fileName = selectedNodeId ? selectedNodeId.split('/').pop() : "";
     const language = fileName?.split('.').pop() === 'ts' || fileName?.split('.').pop() === 'tsx' ? 'typescript' : 'javascript';
@@ -121,38 +139,40 @@ export const CodeViewer = () => {
             </div>
 
            
-            <div className="flex-1 overflow-hidden relative">
-                <ScrollArea className="h-full w-full">
-                    <SyntaxHighlighter
-                        language={language}
-                        style={atomDark}
-                        showLineNumbers={true}
-                        wrapLines={false}
-                        className="h-full w-full text-sm !bg-transparent"
-                        codeTagProps={{
-                            style: { fontFamily: '"Fira Code", "JetBrains Mono", monospace' }
-                        }}
-                        customStyle={{ background: 'transparent', margin: 0, padding: '1.5rem' }}
-                        lineProps={(lineNumber) => {
-                            const style: React.CSSProperties = { display: 'block' };
+            <div
+                ref={codeContainerRef}
+                className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
+            >
+                <SyntaxHighlighter
+                    key={selectedNodeId}
+                    language={language}
+                    style={atomDark}
+                    showLineNumbers={true}
+                    wrapLines={true}
+                    wrapLongLines={false}
+                    className="h-full w-full text-sm !bg-transparent"
+                    codeTagProps={{
+                        style: { fontFamily: '"Fira Code", "JetBrains Mono", monospace' }
+                    }}
+                    customStyle={{ background: 'transparent', margin: 0, padding: '1.5rem' }}
+                    lineProps={(lineNumber) => {
+                        const style: React.CSSProperties = { display: 'block' };
 
-                           
-                            if (
-                                currentHighlight &&
-                                lineNumber >= currentHighlight.startLine &&
-                                lineNumber <= currentHighlight.endLine
-                            ) {
-                                style.backgroundColor = 'rgba(6, 182, 212, 0.15)'; // Cyan tint
-                                style.borderLeft = '4px solid #06b6d4'; // Cyan border
-                                style.background = 'linear-gradient(90deg, rgba(6, 182, 212, 0.15) 0%, rgba(6, 182, 212, 0) 100%)';
-                                style.width = "100%";
-                            }
-                            return { style };
-                        }}
-                    >
-                        {code}
-                    </SyntaxHighlighter>
-                </ScrollArea>
+                        if (
+                            currentHighlight &&
+                            lineNumber >= currentHighlight.startLine &&
+                            lineNumber <= currentHighlight.endLine
+                        ) {
+                            style.backgroundColor = 'rgba(6, 182, 212, 0.15)';
+                            style.borderLeft = '4px solid #06b6d4';
+                            style.background = 'linear-gradient(90deg, rgba(6, 182, 212, 0.15) 0%, rgba(6, 182, 212, 0) 100%)';
+                            style.width = "100%";
+                        }
+                        return { style };
+                    }}
+                >
+                    {code}
+                </SyntaxHighlighter>
             </div>
         </div>
     );

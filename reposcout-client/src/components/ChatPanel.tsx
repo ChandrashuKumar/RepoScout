@@ -20,8 +20,10 @@ export default function ChatPanel({ repoId }: ChatPanelProps) {
     const askQuestion = useAppStore((state) => state.askQuestion);
     const isLoading = useAppStore((state) => state.isLoading);
     const setSelectedNodeId = useAppStore((state) => state.setSelectedNodeId);
+    const setCurrentHighlight = useAppStore((state) => state.setCurrentHighlight);
     const selectedLlm = useAppStore((state) => state.selectedLlm);
     const setSelectedLlm = useAppStore((state) => state.setSelectedLlm);
+    const reactFlowInstance = useAppStore((state) => state.reactFlowInstance);
 
 
     useEffect(() => {
@@ -37,9 +39,23 @@ export default function ChatPanel({ repoId }: ChatPanelProps) {
         await askQuestion(repoId, question);
     };
 
-    const handleSourceClick = (filePath: string) => {
-        console.log("Navigating to:", filePath);
-        setSelectedNodeId(filePath); 
+    const handleSourceClick = (source: { filePath: string; startLine: number; endLine: number }) => {
+        const nodeId = source.filePath.replace(/\\/g, '/');
+
+        // Set both the selected node and the highlight
+        setSelectedNodeId(nodeId);
+        setCurrentHighlight({
+            startLine: source.startLine,
+            endLine: source.endLine
+        });
+
+        // Zoom to the node
+        if (reactFlowInstance) {
+            const node = reactFlowInstance.getNode(nodeId);
+            if (node) {
+                reactFlowInstance.fitView({ nodes: [node], duration: 500, padding: 0.2 });
+            }
+        }
     };
 
     return (
@@ -139,7 +155,7 @@ export default function ChatPanel({ repoId }: ChatPanelProps) {
                                         {msg.sources.map((source, sIdx) => (
                                             <button
                                                 key={sIdx}
-                                                onClick={() => handleSourceClick(source.filePath)}
+                                                onClick={() => handleSourceClick(source)}
                                                 className="flex items-center gap-2 p-2 rounded-lg bg-slate-900/40 border border-slate-800/60 hover:border-cyan-500/30 hover:bg-cyan-950/30 transition-all w-full text-left group"
                                             >
                                                 <Code2 size={12} className="text-slate-500 group-hover:text-cyan-400" />

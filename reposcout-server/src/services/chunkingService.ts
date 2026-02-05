@@ -29,6 +29,7 @@ const chunkArbitraryFile = (sourceCode: string, maxLines: number) : CodeChunk[] 
 }
 const chunkTypescriptCode = (sourceCode: string, fileName: string) : CodeChunk[] => {
     const chunks: CodeChunk[] = [];
+    const processedRanges = new Set<string>();
 
     const sourceFile = ts.createSourceFile(
         fileName,
@@ -36,22 +37,61 @@ const chunkTypescriptCode = (sourceCode: string, fileName: string) : CodeChunk[]
         ts.ScriptTarget.Latest,
         true
     );
-    
-    const visit  = (node: ts.Node) => {
-        if(ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isMethodDeclaration(node) || ts.isArrowFunction(node)) {
-            const start = node.getStart(sourceFile);
-            const end = node.getEnd();
 
-            const startLine = sourceFile.getLineAndCharacterOfPosition(start).line + 1;
-            const endLine = sourceFile.getLineAndCharacterOfPosition(end).line + 1;
+    const addChunk = (node: ts.Node) => {
+        const start = node.getStart(sourceFile);
+        const end = node.getEnd();
+        const rangeKey = `${start}-${end}`;
 
-            const content = sourceCode.substring(start, end);
+        // Avoid duplicate chunks (e.g., arrow function already captured via VariableStatement)
+        if (processedRanges.has(rangeKey)) return;
+        processedRanges.add(rangeKey);
 
-            chunks.push({ content, startLine, endLine });
+        const startLine = sourceFile.getLineAndCharacterOfPosition(start).line + 1;
+        const endLine = sourceFile.getLineAndCharacterOfPosition(end).line + 1;
+        const content = sourceCode.substring(start, end);
+
+        chunks.push({ content, startLine, endLine });
+    };
+
+    const visit = (node: ts.Node) => {
+        // Handle regular functions, classes, and methods directly
+        if (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isMethodDeclaration(node)) {
+            addChunk(node);
+        }
+        // For arrow functions and function expressions, capture the full variable statement
+        // e.g., "const double = (x) => x * 2" instead of just "(x) => x * 2"
+        else if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
+            let parent: ts.Node | undefined = node.parent;
+
+            // Walk up to find VariableStatement (const x = ...) or ExportDeclaration
+            while (parent) {
+                if (ts.isVariableStatement(parent)) {
+                    addChunk(parent);
+                    break;
+                }
+                // Handle: export const fn = () => {}
+                if (ts.isExportAssignment(parent)) {
+                    addChunk(parent);
+                    break;
+                }
+                // Stop if we hit a block or source file without finding a variable statement
+                // This handles cases like arrow functions passed as arguments
+                if (ts.isBlock(parent) || ts.isSourceFile(parent)) {
+                    addChunk(node);
+                    break;
+                }
+                parent = parent.parent;
+            }
+
+            // If no parent found, just add the node itself
+            if (!parent) {
+                addChunk(node);
+            }
         }
 
         ts.forEachChild(node, visit);
-    }
+    };
 
     visit(sourceFile);
 

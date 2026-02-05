@@ -41,6 +41,7 @@ model Repository{
 model RepoFile{
   id          String      @id @default(uuid())
   filePath    String
+  content     String?
   repoId      String
 
   repository  Repository  @relation(fields: [repoId], references: [id], onDelete: Cascade)

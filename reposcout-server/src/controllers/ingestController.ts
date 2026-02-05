@@ -58,7 +58,7 @@ const processSingleFile = async (file: any, tempPath: string, repoId: string): P
         if (!content || content.length > 30000) return 'skipped';
 
         const fileRecord = await prisma.repoFile.create({
-            data: { filePath: file.path, repoId: repoId }
+            data: { filePath: file.path, repoId: repoId, content: content }
         });
 
         const chunks = chunkSourceCode(content, file.name);

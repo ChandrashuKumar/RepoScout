@@ -154,20 +154,16 @@ export const getFileContent = async(req: Request, res: Response) : Promise<any> 
     const fileId = req.params.fileId as string;
 
     try{
-        const chunks = await prisma.codeChunk.findMany({
-            where: {fileId: fileId},
-            select: {
-                content: true
-            },
-            orderBy: {startLine: 'asc'}
-        })
+        const file = await prisma.repoFile.findUnique({
+            where: { id: fileId },
+            select: { content: true }
+        });
 
-        if (!chunks || chunks.length === 0) {
+        if (!file || !file.content) {
             return res.status(404).json({ error: "File content not found" });
         }
 
-        const fullContent = chunks.map(c => c.content).join('\n');
-        res.json({content: fullContent});
+        res.json({ content: file.content });
     }
     catch(error){
         res.status(500).json({error: "Failed to get file content"})

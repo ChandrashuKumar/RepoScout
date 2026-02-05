@@ -12,6 +12,7 @@ import ChatPanel from "@/components/ChatPanel";
 import { Button } from "@/components/ui/button";
 import { MessageCircle, Code2, ArrowLeft } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
+import { useChatStore } from "@/store/useChatStore";
 
 const CollapsedPanelContent = ({ label, onClick }: { label: string, onClick: () => void }) => {
     return (
@@ -34,6 +35,7 @@ const RepoPage = () => {
     const [isChatCollapsed, setIsChatCollapsed] = useState(false);
     const [isCodeCollapsed, setIsCodeCollapsed] = useState(false);
     const panelGroupRef = useRef<any>(null);
+    const prevRepoIdRef = useRef<string | undefined>(undefined);
 
 
     const { repoId } = useParams();
@@ -42,12 +44,15 @@ const RepoPage = () => {
 
     const fetchRepos = useAppStore(state => state.fetchRepos);
     const savedRepos = useAppStore(state => state.savedRepos);
-    const clearChat = useAppStore(state => state.clearChat);
+    const clearChat = useChatStore(state => state.clearChat);
 
 
+    // Only clear chat when repoId changes (not on initial mount/refresh)
     useEffect(() => {
-        
-        clearChat();
+        if (prevRepoIdRef.current !== undefined && prevRepoIdRef.current !== repoId) {
+            clearChat();
+        }
+        prevRepoIdRef.current = repoId;
     }, [repoId, clearChat]);
 
 

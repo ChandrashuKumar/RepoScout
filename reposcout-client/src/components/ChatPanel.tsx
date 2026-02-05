@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useAppStore } from "@/store/useAppStore";
+import { useChatStore } from "@/store/useChatStore";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, User, Code2, ChevronRight, Loader2, FileText, Sparkles, Download } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
@@ -15,8 +16,11 @@ export default function ChatPanel({ repoId }: ChatPanelProps) {
     const [input, setInput] = useState("");
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    // Chat store (sessionStorage)
+    const chatHistory = useChatStore((state) => state.chatHistory);
+    const hasHydrated = useChatStore((state) => state.hasHydrated);
 
-    const chatHistory = useAppStore((state) => state.chatHistory);
+    // App store
     const askQuestion = useAppStore((state) => state.askQuestion);
     const isLoading = useAppStore((state) => state.isLoading);
     const setSelectedNodeId = useAppStore((state) => state.setSelectedNodeId);
@@ -24,7 +28,6 @@ export default function ChatPanel({ repoId }: ChatPanelProps) {
     const selectedLlm = useAppStore((state) => state.selectedLlm);
     const setSelectedLlm = useAppStore((state) => state.setSelectedLlm);
     const reactFlowInstance = useAppStore((state) => state.reactFlowInstance);
-
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -148,21 +151,24 @@ export default function ChatPanel({ repoId }: ChatPanelProps) {
             <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent" ref={scrollRef}>
 
                 
-                {chatHistory.length === 0 && (
+                {hasHydrated && chatHistory.length === 0 && (
                     <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-4 opacity-60">
                         <Sparkles size={32} className="text-cyan-500/50" />
                         <p className="text-sm font-medium text-slate-300">Ask me anything about the code</p>
                     </div>
                 )}
 
-                <AnimatePresence initial={false}>
-                    {chatHistory.map((msg, idx) => (
-                        <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            key={idx}
-                            className={`flex gap-4 ${msg.sender === 'user' ? 'flex-row-reverse' : ''}`}
-                        >
+                {hasHydrated && (
+                    <AnimatePresence mode="popLayout">
+                        {chatHistory.map((msg) => (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                key={msg.id}
+                                layout
+                                className={`flex gap-4 ${msg.sender === 'user' ? 'flex-row-reverse' : ''}`}
+                            >
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border shadow-lg ${msg.sender === 'user'
                                 ? 'bg-blue-600/20 border-blue-500/30 text-blue-400'
                                 : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'
@@ -212,9 +218,10 @@ export default function ChatPanel({ repoId }: ChatPanelProps) {
                                 )}
 
                             </div>
-                        </motion.div>
-                    ))}
-                </AnimatePresence>
+                            </motion.div>
+                        ))}
+                    </AnimatePresence>
+                )}
 
                 {isLoading && (
                     <div className="flex gap-4">

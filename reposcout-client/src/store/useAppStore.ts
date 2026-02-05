@@ -1,17 +1,16 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { authApi, repoApi, chatApi } from '../services/api';
+import { useChatStore } from './useChatStore';
 
 
 interface User { id: string; email: string; name: string; }
 interface Repository { id: string; name: string; url: string; status: 'PENDING' | 'INGESTING' | 'COMPLETED' | 'FAILED'; }
-interface ChatMessage { sender: 'user' | 'ai'; message: string; sources?: { filePath: string; startLine: number; endLine: number }[]; }
 interface Highlight { startLine: number; endLine: number; }
 
 interface AppState {
     currentUser: User | null;
     savedRepos: Repository[];
-    chatHistory: ChatMessage[];
 
     isLoading: boolean;
     error: string | null;
@@ -38,7 +37,6 @@ interface AppState {
 
     // Chat
     askQuestion: (repoId: string, question: string) => Promise<void>;
-    clearChat: () => void;
 
     // UI Setters
     setSelectedNodeId: (nodeId: string | null) => void;
@@ -55,10 +53,9 @@ interface AppState {
 export const useAppStore = create<AppState>()(
     persist(
         (set, get) => ({
-            
+
             currentUser: null,
             savedRepos: [],
-            chatHistory: [],
             isLoading: false,
             error: null,
             selectedNodeId: null,
@@ -111,7 +108,8 @@ export const useAppStore = create<AppState>()(
 
             logout: () => {
                 localStorage.removeItem('token');
-                set({ currentUser: null, savedRepos: [], chatHistory: [], analyzingRepoId: null, analysisCurrentStep: 0 });
+                useChatStore.getState().clearChat();
+                set({ currentUser: null, savedRepos: [], analyzingRepoId: null, analysisCurrentStep: 0 });
             },
 
             checkAuth: () => {
@@ -156,26 +154,29 @@ export const useAppStore = create<AppState>()(
 
             askQuestion: async (repoId, question) => {
                 const { selectedLlm } = get();
+                const { addMessage } = useChatStore.getState();
 
-                set((state) => ({
-                    chatHistory: [...state.chatHistory, { sender: 'user', message: question }],
+                // Add user message to chat store
+                addMessage({ sender: 'user', message: question });
+
+                set({
                     isLoading: true,
                     error: null,
                     highlightedNodes: []
-                }));
+                });
 
                 try {
                     const response = await chatApi.sendMessage(repoId, question, selectedLlm);
                     const sources = response.sources || [];
 
-                    set((state) => ({
-                        chatHistory: [...state.chatHistory, {
-                            sender: 'ai',
-                            message: response.answer,
-                            sources: sources
-                        }],
-                        isLoading: false
-                    }));
+                    // Add AI response to chat store
+                    addMessage({
+                        sender: 'ai',
+                        message: response.answer,
+                        sources: sources
+                    });
+
+                    set({ isLoading: false });
 
                     if (sources.length > 0) {
                         // Highlight all relevant nodes
@@ -206,14 +207,10 @@ export const useAppStore = create<AppState>()(
                     }
 
                 } catch (err: any) {
-                    set((state) => ({
-                        chatHistory: [...state.chatHistory, { sender: 'ai', message: "Sorry, I encountered an error answering that." }],
-                        isLoading: false
-                    }));
+                    addMessage({ sender: 'ai', message: "Sorry, I encountered an error answering that." });
+                    set({ isLoading: false });
                 }
             },
-
-            clearChat: () => set({ chatHistory: [], currentHighlight: null, selectedNodeId: null, highlightedNodes: [] }),
 
       
             setSelectedNodeId: (nodeId) => set({ selectedNodeId: nodeId }),

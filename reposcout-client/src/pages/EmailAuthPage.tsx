@@ -22,9 +22,13 @@ const EmailAuthPage = () => {
   const isLoading = useAppStore((state) => state.isLoading);
   const storeError = useAppStore((state) => state.error);
   const currentUser = useAppStore((state) => state.currentUser);
-
+  const setError = useAppStore((state) => state.setError);
 
   const [localError, setLocalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setError(null);
+  }, [setError]);
 
   useEffect(() => {
     if (currentUser) {
@@ -61,7 +65,8 @@ const EmailAuthPage = () => {
   };
 
   const handleGitHubLogin = () => {
-    alert('Github login later');
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5555';
+    window.location.href = `${apiUrl}/auth/github`;
   };
 
   const displayError = localError || storeError;

@@ -1,9 +1,8 @@
 import { motion } from 'framer-motion';
-import { Terminal, GitBranch, Zap, Search, Code, Globe, ArrowUpRight } from 'lucide-react';
+import { Terminal, GitBranch, Zap, Search, Sparkles, Globe, ArrowUpRight, Link2, MessageSquareCode, Network } from 'lucide-react';
 import { ParticleNetwork } from '@/components/landing/ParticleNetwork';
 import { HeroSection } from '@/components/landing/HeroSection';
 import { Footer } from '@/components/landing/Footer';
-import { FeatureSection } from '@/components/landing/FeatureSection';
 import { cn } from "@/lib/utils";
 
 const BentoItem = ({ title, description, icon: Icon, className, delay }: any) => (
@@ -85,49 +84,49 @@ export default function IntroPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                
+
                         <BentoItem
-                            title="Static Analysis"
-                            description="Deep dive into code structures without cloning locally. Syntax highlighting and dependency graphing in real-time."
+                            title="Repository Ingestion"
+                            description="Paste any GitHub URL to automatically clone, parse, and index the entire codebase on the server."
                             icon={Terminal}
                             className="md:col-span-2"
                             delay={1}
                         />
                         <BentoItem
-                            title="Instant Parse"
-                            description="Powered by Rust-based WASM modules for lightning-fast parsing."
+                            title="Smart Chunking"
+                            description="TypeScript AST-based parsing that splits code into functions, classes, and modules for precise retrieval."
                             icon={Zap}
                             className="md:col-span-1"
                             delay={2}
                         />
 
-                       
+
                         <BentoItem
                             title="Semantic Search"
-                            description="Find functions, definitions, and references using vector embeddings rather than simple string matching."
+                            description="Find relevant code using vector embeddings and RAG rather than simple string matching."
                             icon={Search}
                             className="md:col-span-1"
                             delay={3}
                         />
                         <BentoItem
-                            title="Tree Visualization"
-                            description="Interactive file system explorer using WebGL. Navigate complex folder structures as a 3D node constellation."
+                            title="Graph Visualization"
+                            description="Explore your repository's file structure as an interactive node graph with syntax-highlighted code previews."
                             icon={GitBranch}
                             className="md:col-span-2"
                             delay={4}
                         />
 
-                        
+
                         <BentoItem
-                            title="Code Metrics"
-                            description="Cyclomatic complexity, maintainability index, and line counts visualized instantly upon repository load."
-                            icon={Code}
+                            title="Multi-LLM Chat"
+                            description="Switch between multiple LLM models on the fly to chat with your codebase."
+                            icon={Sparkles}
                             className="md:col-span-1"
                             delay={5}
                         />
                         <BentoItem
                             title="Dependency Map"
-                            description="Visualizing external and internal dependencies to understand the architectural footprint of any project."
+                            description="Visualize file relationships and internal dependencies to understand the architecture of any project."
                             icon={Globe}
                             className="md:col-span-2"
                             delay={6}
@@ -136,7 +135,7 @@ export default function IntroPage() {
                 </section>
 
                 <section className="w-full pb-32 px-4">
-                    <div className="flex flex-col md:flex-row justify-between items-end mb-12">
+                    <div className="flex flex-col md:flex-row justify-between items-end mb-16">
                         <motion.h2
                             initial={{ opacity: 0, x: -20 }}
                             whileInView={{ opacity: 1, x: 0 }}
@@ -161,25 +160,91 @@ export default function IntroPage() {
                         </motion.span>
                     </div>
 
-                    <div className="space-y-32">
-                        <FeatureSection
-                            title="Analyze any repository"
-                            description="Just paste a link to any public GitHub repository. RepoScout will clone, parse, and index the entire codebase, building a smart graph of its structure."
-                            videoSrc="/videos/demo-analyze.mp4"
-                        />
+                    <div className="relative">
+                        {/* Connecting line */}
+                        <div className="absolute left-6 md:left-1/2 md:-translate-x-px top-0 bottom-0 w-px bg-gradient-to-b from-cyan-500/50 via-slate-700/50 to-transparent hidden sm:block" />
 
-                        <FeatureSection
-                            title="Chat with your code"
-                            description="Ask questions in plain English, like 'How is user authentication handled?' or 'Explain the useAnalytics hook'. Get instant answers and see the relevant code."
-                            reverse={true}
-                            videoSrc="/videos/demo-chat.mp4"
-                        />
+                        <div className="space-y-16 md:space-y-24">
+                            {[
+                                {
+                                    step: '01',
+                                    title: 'Paste a GitHub URL',
+                                    description: 'Drop any public repository link. RepoScout clones, parses, and indexes the entire codebase on the server with real-time progress tracking.',
+                                    icon: Link2,
+                                    code: 'https://github.com/user/repo',
+                                },
+                                {
+                                    step: '02',
+                                    title: 'Explore the Graph',
+                                    description: 'Browse your repository as an interactive node graph. Click any file to view syntax-highlighted source code with line numbers.',
+                                    icon: Network,
+                                    code: 'src/  components/  utils/  index.ts',
+                                },
+                                {
+                                    step: '03',
+                                    title: 'Chat with Your Code',
+                                    description: 'Ask questions in plain English. Get contextual answers powered by RAG with direct references to the relevant source files.',
+                                    icon: MessageSquareCode,
+                                    code: '"How does authentication work?"',
+                                },
+                            ].map((item, idx) => (
+                                <motion.div
+                                    key={item.step}
+                                    initial={{ opacity: 0, y: 30 }}
+                                    whileInView={{ opacity: 1, y: 0 }}
+                                    viewport={{ once: true }}
+                                    transition={{ delay: idx * 0.1, duration: 0.5 }}
+                                    className={cn(
+                                        "relative grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center",
+                                        idx % 2 !== 0 && "md:direction-rtl"
+                                    )}
+                                >
+                                    {/* Step indicator on the line */}
+                                    <div className="absolute left-6 md:left-1/2 -translate-x-1/2 top-0 z-10 hidden sm:flex items-center justify-center w-12 h-12 rounded-full bg-slate-900 border-2 border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.15)]">
+                                        <span className="text-cyan-400 font-mono text-sm font-bold">{item.step}</span>
+                                    </div>
 
-                        <FeatureSection
-                            title="Streamline your workflow"
-                            description="Automate code reviews, onboard new team members faster, and quickly get up to speed on unfamiliar projects with AI-powered insights."
-                            videoSrc="/videos/demo-workflow.mp4"
-                        />
+                                    {/* Text side */}
+                                    <div className={cn(
+                                        "pl-16 sm:pl-20 md:pl-0",
+                                        idx % 2 === 0 ? "md:text-right md:pr-16" : "md:order-last md:pl-16"
+                                    )}>
+                                        <div className={cn(
+                                            "flex items-center gap-3 mb-3",
+                                            idx % 2 === 0 ? "md:justify-end" : "md:justify-start"
+                                        )}>
+                                            <span className="text-cyan-400 font-mono text-sm font-bold sm:hidden">{item.step}</span>
+                                            <div className="p-2 rounded-xl bg-slate-800/50 border border-slate-700/50 text-cyan-400">
+                                                <item.icon size={20} />
+                                            </div>
+                                        </div>
+                                        <h3 className="text-xl font-bold text-white mb-2">{item.title}</h3>
+                                        <p className="text-slate-400 text-sm leading-relaxed">{item.description}</p>
+                                    </div>
+
+                                    {/* Visual side */}
+                                    <div className={cn(
+                                        "pl-16 sm:pl-20 md:pl-0",
+                                        idx % 2 === 0 ? "md:pl-16" : "md:pr-16"
+                                    )}>
+                                        <div className="relative group">
+                                            <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500/10 to-blue-600/10 rounded-2xl blur opacity-0 group-hover:opacity-100 transition duration-500" />
+                                            <div className="relative rounded-2xl border border-slate-800 bg-slate-950/80 p-6 font-mono text-sm">
+                                                <div className="flex items-center gap-2 mb-4">
+                                                    <div className="w-3 h-3 rounded-full bg-red-500/60" />
+                                                    <div className="w-3 h-3 rounded-full bg-yellow-500/60" />
+                                                    <div className="w-3 h-3 rounded-full bg-green-500/60" />
+                                                </div>
+                                                <div className="text-slate-500">
+                                                    <span className="text-slate-600">{'>'} </span>
+                                                    <span className="text-cyan-400">{item.code}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </div>
                     </div>
                 </section>
 

@@ -134,10 +134,16 @@ export const streamIngestionProgress = async (req: Request, res: Response) => {
     });
 }
 
-const performIngestion = async (repoId: string, repoUrl: string, tempPath: string) => {
+const getAuthenticatedCloneUrl = (repoUrl: string, token: string): string => {
+    // https://github.com/user/repo -> https://<token>@github.com/user/repo.git
+    return repoUrl.replace('https://github.com', `https://${token}@github.com`);
+};
+
+const performIngestion = async (repoId: string, repoUrl: string, tempPath: string, githubToken?: string | null) => {
     try {
+        const cloneUrl = githubToken ? getAuthenticatedCloneUrl(repoUrl, githubToken) : repoUrl;
         console.log(`[IngestWorker] Starting background job for: ${repoUrl}`);
-        await simpleGit().clone(repoUrl, tempPath);
+        await simpleGit().clone(cloneUrl, tempPath);
 
         const fileTree = await generateFileTree(tempPath);
 
@@ -263,8 +269,12 @@ export const ingestRepo = async(req: Request, res: Response) : Promise<any> => {
     if (!userId) return res.status(401).json({ error: "User not authenticated" });
     if (!repoName || !repoUrl) return res.status(400).json({ error: "Missing Name/URL" });
 
+    // Look up GitHub token for private repo support
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { githubAccessToken: true } });
+    const githubToken = user?.githubAccessToken || null;
+
     const FILE_LIMIT = 300;
-    const fileCount = await getRepoFileCount(repoUrl);
+    const fileCount = await getRepoFileCount(repoUrl, githubToken);
 
     if (fileCount === -1) {
         return res.status(400).json({
@@ -294,7 +304,7 @@ export const ingestRepo = async(req: Request, res: Response) : Promise<any> => {
         const processingId = uuidv4();
         const tempPath = path.join(__dirname, '../../temp', processingId);
 
-        performIngestion(repo.id, repoUrl, tempPath);
+        performIngestion(repo.id, repoUrl, tempPath, githubToken);
 
         return res.status(200).json({
             message: "Ingestion started.",

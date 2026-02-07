@@ -1,9 +1,9 @@
 import { Octokit } from '@octokit/rest'
 
-const octokit = new Octokit();
-
-export const getRepoFileCount = async (repoUrl: string): Promise<number> => {
+export const getRepoFileCount = async (repoUrl: string, githubToken?: string | null): Promise<number> => {
     try {
+        const octokit = new Octokit(githubToken ? { auth: githubToken } : {});
+
         const match = repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
         if (!match) throw new Error('Invalid Github URL');
 

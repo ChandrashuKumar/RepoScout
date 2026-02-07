@@ -18,7 +18,7 @@ passport.use(
             clientID: process.env.GITHUB_CLIENT_ID || '',
             clientSecret: process.env.GITHUB_CLIENT_SECRET || '',
             callbackURL: process.env.GITHUB_CALLBACK_URL || 'http://localhost:5555/auth/github/callback',
-            scope: ['user:email'],
+            scope: ['user:email', 'repo'],
         },
         async (accessToken: string, refreshToken: string, profile: any, done: Function) => {
             try {
@@ -40,6 +40,10 @@ passport.use(
 
                 if (user) {
                     console.log("[Passport] User found by GitHub ID. Logging in.");
+                    user = await prisma.user.update({
+                        where: { id: user.id },
+                        data: { githubAccessToken: accessToken },
+                    });
                     return done(null, user);
                 }
 
@@ -52,7 +56,7 @@ passport.use(
                     console.log("[Passport] User found by Email. Linking account.");
                     user = await prisma.user.update({
                         where: { id: user.id },
-                        data: { githubId: githubId },
+                        data: { githubId: githubId, githubAccessToken: accessToken },
                     });
                     return done(null, user);
                 }
@@ -62,6 +66,7 @@ passport.use(
                     data: {
                         email: email,
                         githubId: githubId,
+                        githubAccessToken: accessToken,
                         passwordHash: null,
                     },
                 });

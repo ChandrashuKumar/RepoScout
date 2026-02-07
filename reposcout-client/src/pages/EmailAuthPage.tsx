@@ -169,6 +169,7 @@ const EmailAuthPage = () => {
             <Github className="mr-2 h-4 w-4" />
             Sign in with GitHub
           </Button>
+          <p className="text-center text-xs text-slate-500 mt-3">Sign in with GitHub to analyze private repositories</p>
 
         </CardContent>
       </Card>

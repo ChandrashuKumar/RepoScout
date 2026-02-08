@@ -23,8 +23,9 @@ const PORT = process.env.PORT || 5555;
 app.set("trust proxy", 1);
 
 // CORS configuration
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000'],
+  origin: [FRONTEND_URL, 'http://localhost:5173', 'http://localhost:3000'],
   credentials: true,
 }));
 

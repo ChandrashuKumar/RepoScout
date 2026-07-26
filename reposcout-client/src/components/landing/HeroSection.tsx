@@ -40,8 +40,8 @@ export const HeroSection = () => {
 
             <h1 className="text-5xl md:text-8xl font-black tracking-tight text-white max-w-7xl mx-auto leading-[1.1]">
                 <span className="block mb-6 drop-shadow-2xl">
-                    <span className="text-white">Source</span>
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600">Seek</span>
+                    <span className="text-white">Repo</span>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-600">Scout</span>
                 </span>
 
 

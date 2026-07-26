@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Github, Twitter, Linkedin, Activity, Power, Loader2 } from 'lucide-react';
+import { Github, Linkedin, Activity, Power, Loader2 } from 'lucide-react';
 import { systemApi } from '@/services/api';
 
 export const Footer = () => {
@@ -118,9 +118,8 @@ export const Footer = () => {
                         © {new Date().getFullYear()} RepoScout. All rights reserved.
                     </p>
                     <div className="flex gap-6">
-                        <a href="https://github.com/AdityaAryan-1408" className="text-slate-500 hover:text-white transition-colors"><Github className="h-5 w-5" /></a>
-                        <a href="https://x.com/AdityaAryan1408" className="text-slate-500 hover:text-white transition-colors"><Twitter className="h-5 w-5" /></a>
-                        <a href="https://www.linkedin.com/in/aditya-aryan-7211b3241/" className="text-slate-500 hover:text-white transition-colors"><Linkedin className="h-5 w-5" /></a>
+                        <a href="https://github.com/ChandrashuKumar" className="text-slate-500 hover:text-white transition-colors"><Github className="h-5 w-5" /></a>
+                        <a href="https://www.linkedin.com/in/chandrashu-kumar/" className="text-slate-500 hover:text-white transition-colors"><Linkedin className="h-5 w-5" /></a>
                     </div>
                 </div>
             </div>

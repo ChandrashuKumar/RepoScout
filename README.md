@@ -28,6 +28,7 @@ An AI-powered tool for exploring and understanding GitHub repositories. Paste a 
 - PostgreSQL database with pgvector extension (e.g. Supabase)
 - Git installed on the server
 - API keys for Gemini, Groq, and HuggingFace
+- Redis or Valkey (optional, needed to run more than one server instance)
 
 ### Setup
 
@@ -58,7 +59,12 @@ HUGGINGFACE_ACCESS_TOKEN=your_hf_token
 GITHUB_CLIENT_ID=your_github_oauth_client_id
 GITHUB_CLIENT_SECRET=your_github_oauth_client_secret
 GITHUB_CALLBACK_URL=http://localhost:5555/auth/github/callback
+# Optional: Redis/Valkey URL for ingestion progress events.
+# Required when running more than one server instance.
+# REDIS_URL=redis://localhost:6379
 ```
+
+If `REDIS_URL` is not set, progress events stay in server memory. This works only with a single server instance.
 
 Push the schema to the database and start:
 

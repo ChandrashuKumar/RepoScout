@@ -6,21 +6,14 @@ import path from "path"
 import simpleGit from "simple-git"
 import { generateFileTree, FileNode, processFile } from "../services/fileService"
 import { generateEmbedding } from "../services/aiService"
-import { ingestionEvents } from "../lib/ingestionEmitter"
+import { publishProgress, subscribeProgress, IngestionProgress } from "../lib/ingestionEmitter"
 import { chunkSourceCode } from "../services/chunkingService"
 import fs from "fs-extra"
-
-interface IngestionProgress {
-    message: string
-    progress: number
-    eta: string | null
-    timestamp: string
-}
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const emitUpdate = (repoId: string, message: string, progress: number, eta: string | null = null) => {
-    ingestionEvents.emit(`progress-${repoId}`, {
+    publishProgress(repoId, {
         message,
         progress,
         eta,      
@@ -94,7 +87,7 @@ const processSingleFile = async (file: any, tempPath: string, repoId: string): P
 };
 
 export const streamIngestionProgress = async (req: Request, res: Response) => {
-    const {repoId} = req.params;
+    const repoId = req.params.repoId as string;
 
     console.log(`[SSE] Client connected for repo: ${repoId}`);
 
@@ -112,7 +105,18 @@ export const streamIngestionProgress = async (req: Request, res: Response) => {
     };
     res.write(`data: ${JSON.stringify(handshake)}\n\n`);
 
+    let unsubscribe: (() => Promise<void>) | null = null;
+    let closed = false;
+
+    const cleanup = () => {
+        if (closed) return;
+        closed = true;
+        unsubscribe?.();
+    };
+
     const onProgress = (data: IngestionProgress) => {
+        if (closed) return;
+
         console.log(`[SSE] Emitting to ${repoId}:`, data.message); 
 
         res.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -122,16 +126,30 @@ export const streamIngestionProgress = async (req: Request, res: Response) => {
 
         if (data.progress === 100 || data.message.includes("Error")) {
             res.end();
-            ingestionEvents.off(`progress-${repoId}`, onProgress);
+            cleanup();
         }
     }
 
-    ingestionEvents.on(`progress-${repoId}`, onProgress);
-
     req.on('close', () => {
         console.log(`[SSE] Client disconnected: ${repoId}`);
-        ingestionEvents.off(`progress-${repoId}`, onProgress);
+        cleanup();
     });
+
+    try {
+        unsubscribe = await subscribeProgress(repoId, onProgress);
+    } catch (err: any) {
+        console.error(`[SSE] Failed to subscribe for ${repoId}:`, err.message);
+        onProgress({
+            message: "Error: Could not connect to progress updates.",
+            progress: 0,
+            eta: null,
+            timestamp: new Date().toLocaleTimeString()
+        });
+        return;
+    }
+
+    // The client may have disconnected while we were subscribing.
+    if (closed) await unsubscribe();
 }
 
 const getAuthenticatedCloneUrl = (repoUrl: string, token: string): string => {
@@ -140,6 +158,8 @@ const getAuthenticatedCloneUrl = (repoUrl: string, token: string): string => {
 };
 
 const performIngestion = async (repoId: string, repoUrl: string, tempPath: string, githubToken?: string | null) => {
+    let lastProgress = 0;
+
     try {
         const cloneUrl = githubToken ? getAuthenticatedCloneUrl(repoUrl, githubToken) : repoUrl;
         console.log(`[IngestWorker] Starting background job for: ${repoUrl}`);
@@ -176,7 +196,8 @@ const performIngestion = async (repoId: string, repoUrl: string, tempPath: strin
         });
 
         console.log(`[IngestWorker] Filtered down to ${filesToProcess.length} valid files.`);
-        emitUpdate(repoId, `Found ${filesToProcess.length} valid source files. Starting ingestion...`, 15);
+        lastProgress = 15;
+        emitUpdate(repoId, `Found ${filesToProcess.length} valid source files. Starting ingestion...`, lastProgress);
 
         const BATCH_SIZE = 5;
         const totalFiles = filesToProcess.length;
@@ -199,6 +220,7 @@ const performIngestion = async (repoId: string, repoUrl: string, tempPath: strin
                 : `${etaSeconds}s`;
 
             const currentProgress = 15 + Math.floor((processedCount / totalFiles) * 80);
+            lastProgress = currentProgress;
 
             emitUpdate(
                 repoId,
@@ -241,6 +263,7 @@ const performIngestion = async (repoId: string, repoUrl: string, tempPath: strin
 
     } catch (error) {
         console.error('[IngestWorker] FAILED:', error);
+        emitUpdate(repoId, "Error: Ingestion failed. Please delete the repository and try again.", lastProgress, null);
         await prisma.repository.update({ where: { id: repoId }, data: { status: "FAILED" } });
         await fs.remove(tempPath).catch(() => { });
     }

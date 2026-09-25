@@ -10,6 +10,7 @@ import fs from 'fs-extra';
 dotenv.config();
 
 import './lib/passport';
+import { connectRedis, closeRedis } from './lib/redis';
 
 // Import routes
 import authRoutes from './routes/authRoutes';
@@ -73,9 +74,25 @@ const cleanupTempDir = async () => {
   }
 };
 
-// Start server after cleanup
-cleanupTempDir().then(() => {
-  app.listen(PORT, () => {
+// Start server after cleanup and Redis connection
+const startServer = async () => {
+  await cleanupTempDir();
+  await connectRedis();
+
+  const server = app.listen(PORT, () => {
     console.log(`[Server] Running on port ${PORT}`);
   });
+
+  // Render sends SIGTERM before stopping an instance (deploys, restarts)
+  process.on('SIGTERM', async () => {
+    console.log('[Server] SIGTERM received. Shutting down...');
+    server.close();
+    await closeRedis();
+    process.exit(0);
+  });
+};
+
+startServer().catch((error) => {
+  console.error('[Server] Failed to start:', error);
+  process.exit(1);
 });

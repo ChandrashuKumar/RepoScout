@@ -80,9 +80,20 @@ export const repoApi = {
     }
 };
 
+export interface ChatHistoryTurn {
+    sender: 'user' | 'ai';
+    message: string;
+}
+
 export const chatApi = {
-    sendMessage: async (repoId: string, question: string, llm: string = 'gemini') => {
-        const res = await api.post(`/api/chat/${repoId}`, { question, llm });
+    sendMessage: async (
+        repoId: string,
+        question: string,
+        llm: string = 'gemini',
+        mode: 'fast' | 'deep' = 'fast',
+        history: ChatHistoryTurn[] = []
+    ) => {
+        const res = await api.post(`/api/chat/${repoId}`, { question, llm, mode, history });
         return res.data;
     }
 };

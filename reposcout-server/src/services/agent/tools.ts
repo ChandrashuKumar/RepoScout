@@ -48,10 +48,16 @@ export class SourceTracker {
 const escapeLike = (text: string) => text.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 export const submitAnswerSchema = z.object({
-    answer: z.string().describe("The final answer to the user's question, in Markdown. Cite file paths."),
-    sourceIds: z
-        .array(z.string())
-        .describe('Ids of ALL sources the answer relies on, e.g. ["S1", "S4"].'),
+    answer: z
+        .string()
+        .describe("The final answer to the user's question, in Markdown. Name files and functions; do not write source ids like [S3] in it."),
+    citations: z
+        .array(z.object({
+            id: z.string().describe('A source id from a tool result, e.g. "S4".'),
+            startLine: z.number().int().optional().describe("First line of the relevant part, if narrower than the whole source."),
+            endLine: z.number().int().optional().describe("Last line of the relevant part."),
+        }))
+        .describe("ALL sources the answer relies on. Use the line numbers shown in tool results to point at the exact lines."),
 });
 
 export const SUBMIT_ANSWER = "submitAnswer";

@@ -1,11 +1,18 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
+export interface AgentStep {
+    tool: string;
+    input: string;
+}
+
 interface ChatMessage {
     id: string;
     sender: 'user' | 'ai';
     message: string;
     sources?: { filePath: string; startLine: number; endLine: number }[];
+    mode?: 'fast' | 'deep';
+    steps?: AgentStep[];
 }
 
 interface ChatState {

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAppStore } from "@/store/useAppStore";
 import { useChatStore } from "@/store/useChatStore";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, User, Code2, ChevronRight, Loader2, FileText, Sparkles, Download } from "lucide-react";
+import { Send, User, Code2, ChevronRight, Loader2, FileText, Sparkles, Download, Telescope, ListTree } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,16 @@ import { ButtonGroup } from "@/components/ui/button-group";
 interface ChatPanelProps {
     repoId: string;
 }
+
+// How each deep mode step is labeled in the steps list
+const STEP_LABELS: Record<string, string> = {
+    searchCode: "search",
+    grep: "grep",
+    readFile: "read",
+    listFiles: "list",
+    switchModel: "switched model",
+    limitReached: "limit reached",
+};
 
 export default function ChatPanel({ repoId }: ChatPanelProps) {
     const [input, setInput] = useState("");
@@ -27,6 +37,8 @@ export default function ChatPanel({ repoId }: ChatPanelProps) {
     const setCurrentHighlight = useAppStore((state) => state.setCurrentHighlight);
     const selectedLlm = useAppStore((state) => state.selectedLlm);
     const setSelectedLlm = useAppStore((state) => state.setSelectedLlm);
+    const chatMode = useAppStore((state) => state.chatMode);
+    const setChatMode = useAppStore((state) => state.setChatMode);
     const reactFlowInstance = useAppStore((state) => state.reactFlowInstance);
 
     useEffect(() => {
@@ -190,6 +202,28 @@ export default function ChatPanel({ repoId }: ChatPanelProps) {
                                     </ReactMarkdown>
                                 </div>
 
+                                {msg.steps && msg.steps.length > 0 && (
+                                    <details className="mt-2 w-full group/steps">
+                                        <summary className="flex items-center gap-2 text-[10px] text-slate-500 font-mono uppercase tracking-wider cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden hover:text-slate-300">
+                                            <ChevronRight size={10} className="transition-transform group-open/steps:rotate-90" />
+                                            <ListTree size={10} />
+                                            <span>Deep mode · {msg.steps.length} {msg.steps.length === 1 ? 'step' : 'steps'}</span>
+                                        </summary>
+                                        <ol className="mt-1.5 ml-1 pl-3 space-y-1 border-l border-slate-800">
+                                            {msg.steps.map((step, stepIdx) => (
+                                                <li
+                                                    key={stepIdx}
+                                                    title={step.input}
+                                                    className="text-[11px] font-mono text-slate-400 truncate"
+                                                >
+                                                    <span className="text-cyan-400/80">{STEP_LABELS[step.tool] ?? step.tool}</span>
+                                                    {step.input && <span className="ml-2">{step.input}</span>}
+                                                </li>
+                                            ))}
+                                        </ol>
+                                    </details>
+                                )}
+
                                 {msg.sources && msg.sources.length > 0 && (
                                     <div className="mt-2 w-full space-y-1">
                                         <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono uppercase tracking-wider mb-1">
@@ -226,7 +260,9 @@ export default function ChatPanel({ repoId }: ChatPanelProps) {
                 {isLoading && (
                     <div className="flex gap-4">
                         <Loader2 className="animate-spin text-cyan-400" size={14} />
-                        <span className="text-xs text-slate-500 animate-pulse">Thinking...</span>
+                        <span className="text-xs text-slate-500 animate-pulse">
+                            {chatMode === 'deep' ? 'Researching the codebase... this can take up to a minute' : 'Thinking...'}
+                        </span>
                     </div>
                 )}
             </div>
@@ -234,13 +270,27 @@ export default function ChatPanel({ repoId }: ChatPanelProps) {
             {/* Input Area */}
             <div className="p-4 border-t border-slate-700/50 bg-[#0a0f1e] shrink-0">
                 <div className="relative flex items-center bg-[#0a0f1e] rounded-xl border border-slate-700/50 shadow-xl">
+                    <button
+                        type="button"
+                        onClick={() => setChatMode(chatMode === 'deep' ? 'fast' : 'deep')}
+                        aria-pressed={chatMode === 'deep'}
+                        title="Deep mode: the assistant searches and reads files before answering. Slower, but better for questions that span several files."
+                        className={`ml-2 shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                            chatMode === 'deep'
+                                ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 hover:bg-cyan-500/30'
+                                : 'bg-slate-800/50 border-slate-700 text-slate-400 hover:text-slate-200'
+                        }`}
+                    >
+                        <Telescope size={14} />
+                        Deep
+                    </button>
                     <input
                         type="text"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                         placeholder="Ask about this repo..."
-                        className="w-full bg-transparent text-white px-4 py-3.5 outline-none font-mono text-sm"
+                        className="w-full min-w-0 bg-transparent text-white px-3 py-3.5 outline-none font-mono text-sm"
                         disabled={isLoading}
                     />
                     <button onClick={handleSend} disabled={isLoading || !input.trim()} className="p-2 mr-2 text-slate-400 hover:text-cyan-400">

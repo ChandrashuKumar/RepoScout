@@ -93,6 +93,10 @@ export const makeTools = (repoId: string, tracker: SourceTracker) => {
 
     const readFile = tool(
         async ({ path, startLine, endLine }) => {
+            if (startLine !== undefined && endLine !== undefined && endLine < startLine) {
+                return `Error: endLine (${endLine}) is before startLine (${startLine}). endLine is a line number, not a line count. To read ${endLine} lines from line ${startLine}, use endLine=${startLine + endLine - 1}.`;
+            }
+
             const file = await prisma.repoFile.findFirst({
                 where: { repoId, filePath: path },
                 select: { filePath: true, content: true },
@@ -141,7 +145,7 @@ export const makeTools = (repoId: string, tracker: SourceTracker) => {
             schema: z.object({
                 path: z.string().describe("File path exactly as shown by listFiles, grep or searchCode."),
                 startLine: z.number().int().optional().describe("First line to read (1-based)."),
-                endLine: z.number().int().optional().describe("Last line to read."),
+                endLine: z.number().int().optional().describe("Last line number to read (inclusive), not a count."),
             }),
         }
     );

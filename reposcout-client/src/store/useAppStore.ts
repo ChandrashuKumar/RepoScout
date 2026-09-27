@@ -22,6 +22,7 @@ interface AppState {
     analyzingRepoId: string | null;
     analysisCurrentStep: number;
     selectedLlm: 'gemini' | 'groq';
+    chatMode: 'fast' | 'deep';
 
     // Auth
     login: (email: string, password: string) => Promise<void>;
@@ -45,6 +46,7 @@ interface AppState {
     setCurrentHighlight: (highlight: Highlight | null) => void;
     setError: (error: string | null) => void;
     setSelectedLlm: (llm: 'gemini' | 'groq') => void;
+    setChatMode: (mode: 'fast' | 'deep') => void;
 
     setAnalyzingRepoId: (id: string | null) => void;
     setAnalysisCurrentStep: (step: number) => void;
@@ -65,10 +67,12 @@ export const useAppStore = create<AppState>()(
             analyzingRepoId: null,
             analysisCurrentStep: 0,
             selectedLlm: 'gemini',
+            chatMode: 'fast',
 
             setAnalyzingRepoId: (id) => set({ analyzingRepoId: id }),
             setAnalysisCurrentStep: (step) => set({ analysisCurrentStep: step }),
             setSelectedLlm: (llm) => set({ selectedLlm: llm }),
+            setChatMode: (mode) => set({ chatMode: mode }),
             setHighlightedNodes: (nodes) => set({ highlightedNodes: nodes }), 
 
             verifySession: async () => {
@@ -153,8 +157,13 @@ export const useAppStore = create<AppState>()(
             },
 
             askQuestion: async (repoId, question) => {
-                const { selectedLlm } = get();
-                const { addMessage } = useChatStore.getState();
+                const { selectedLlm, chatMode } = get();
+                const { addMessage, chatHistory } = useChatStore.getState();
+
+                // Deep mode gets the last few messages so follow-up questions work
+                const history = chatMode === 'deep'
+                    ? chatHistory.slice(-6).map(({ sender, message }) => ({ sender, message }))
+                    : [];
 
                 // Add user message to chat store
                 addMessage({ sender: 'user', message: question });
@@ -166,14 +175,16 @@ export const useAppStore = create<AppState>()(
                 });
 
                 try {
-                    const response = await chatApi.sendMessage(repoId, question, selectedLlm);
+                    const response = await chatApi.sendMessage(repoId, question, selectedLlm, chatMode, history);
                     const sources = response.sources || [];
 
                     // Add AI response to chat store
                     addMessage({
                         sender: 'ai',
                         message: response.answer,
-                        sources: sources
+                        sources: sources,
+                        mode: chatMode,
+                        steps: response.steps
                     });
 
                     set({ isLoading: false });

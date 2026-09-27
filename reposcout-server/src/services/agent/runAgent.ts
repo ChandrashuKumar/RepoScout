@@ -2,7 +2,10 @@ import { AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage } from
 import { StructuredToolInterface } from "@langchain/core/tools";
 import { traceable } from "langsmith/traceable";
 import { getChatModel, isConfigured, LlmProvider, otherProvider, toProvider } from "../../lib/llm";
+import { z } from "zod";
 import { AgentSource, makeTools, SourceTracker, SUBMIT_ANSWER, submitAnswerSchema, submitAnswerTool } from "./tools";
+
+type Citation = z.infer<typeof submitAnswerSchema>["citations"][number];
 
 const MAX_STEPS = 8;
 const TIME_LIMIT_MS = 90_000;
@@ -39,17 +42,26 @@ How to research:
 - listFiles: see how the project is organized.
 - You have at most ${MAX_STEPS} rounds of tool calls, so be efficient. You can call several tools in one round.
 
-Every tool result is labeled with a source id like [S3].
+Every tool result is labeled with a source id like [S3], and code is shown with line numbers.
 
 When you know the answer, call ${SUBMIT_ANSWER} with:
 - answer: a clear explanation in Markdown that names the files and functions involved.
-- sourceIds: the ids of ALL sources your answer relies on.
+  The user cannot see source ids, so never write ids like [S3] in the answer. Name the file instead.
+- citations: ALL sources your answer relies on. For each, give its id, and when only part of it
+  matters, the startLine and endLine of that part (for example the few lines of a function you describe).
 If the code does not contain the answer, say so in ${SUBMIT_ANSWER} instead of guessing.
 `.trim();
 
 const truncate = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}...` : text);
 
 const seconds = (since: number) => `${((Date.now() - since) / 1000).toFixed(1)}s`;
+
+const describeUsage = (message: AIMessage): string => {
+    const usage = message.usage_metadata;
+    if (!usage) return "tokens: not reported";
+    const thinking = usage.output_token_details?.reasoning;
+    return `tokens in=${usage.input_tokens} out=${usage.output_tokens}` + (thinking ? ` (thinking=${thinking})` : "");
+};
 
 /** Short, readable label for a tool call, shown in the steps list. */
 const describeToolCall = (name: string, args: Record<string, any>): string => {
@@ -115,23 +127,60 @@ const toHandoffMessage = (work: BaseMessage[], failedProvider: LlmProvider): Hum
     );
 };
 
+const baseName = (filePath: string) => filePath.split("/").pop() ?? filePath;
+
+/**
+ * Narrows a cited source to the lines the model pointed at, but only if those
+ * lines fall inside what the agent actually read. Otherwise keeps the whole source.
+ */
+const resolveCitation = (citation: Citation, tracker: SourceTracker): AgentSource | undefined => {
+    const source = tracker.get(citation.id);
+    if (!source) return undefined;
+
+    const start = citation.startLine ?? source.startLine;
+    const end = citation.endLine ?? (citation.startLine !== undefined ? start : source.endLine);
+    const inside = start >= source.startLine && end <= source.endLine && start <= end;
+
+    return inside ? { filePath: source.filePath, startLine: start, endLine: end } : source;
+};
+
+/**
+ * Replaces source ids the model wrote into the answer anyway with file names:
+ * "[S7, lines 296-297]" becomes "(ingestController.ts, lines 296-297)".
+ */
+const replaceSourceIds = (answer: string, tracker: SourceTracker): string =>
+    answer.replace(/( ?)\[([^\[\]\n]*\bS\d+\b[^\[\]\n]*)\](?!\()/gi, (_match, space: string, inner: string) => {
+        const parts = inner.split(",").map((part) => part.trim()).filter(Boolean);
+        const names: string[] = [];
+        for (const part of parts) {
+            const name = /^S\d+$/i.test(part)
+                ? (tracker.get(part) ? baseName(tracker.get(part)!.filePath) : "")
+                : part;
+            if (name && !names.includes(name)) names.push(name);
+        }
+        return names.length > 0 ? `${space}(${names.join(", ")})` : "";
+    });
+
 const buildResult = (
     answer: string,
-    sourceIds: string[] | null,
+    citations: Citation[] | null,
     tracker: SourceTracker,
     steps: AgentStep[]
 ): AgentResult => {
     const cited: AgentSource[] = [];
-    for (const id of sourceIds ?? []) {
-        const source = tracker.get(id);
-        if (source && !cited.includes(source)) cited.push(source);
+    for (const citation of citations ?? []) {
+        const source = resolveCitation(citation, tracker);
+        const duplicate = cited.some((c) =>
+            c.filePath === source?.filePath && c.startLine === source.startLine && c.endLine === source.endLine
+        );
+        if (source && !duplicate) cited.push(source);
     }
 
     // Nothing valid cited: fall back to the first things the agent looked at.
     const sources = cited.length > 0 ? cited : tracker.all().slice(0, MAX_FALLBACK_SOURCES);
 
     return {
-        answer: answer.trim(),
+        answer: replaceSourceIds(answer, tracker).trim(),
         sources: sources.length > 0 ? sources : null,
         steps,
     };
@@ -142,7 +191,7 @@ const readFinalAnswer = (response: AIMessage, tracker: SourceTracker, steps: Age
     const submit = response.tool_calls?.find((call) => call.name === SUBMIT_ANSWER);
     if (submit) {
         const parsed = submitAnswerSchema.safeParse(submit.args);
-        if (parsed.success) return buildResult(parsed.data.answer, parsed.data.sourceIds, tracker, steps);
+        if (parsed.success) return buildResult(parsed.data.answer, parsed.data.citations, tracker, steps);
         if (typeof submit.args.answer === "string") return buildResult(submit.args.answer, null, tracker, steps);
     }
 
@@ -216,7 +265,7 @@ const runAgentImpl = async (
 
             const calls = response.tool_calls ?? [];
             console.log(
-                `[Agent] Round ${rounds}: ${provider} took ${seconds(callStartedAt)}, ` +
+                `[Agent] Round ${rounds}: ${provider} took ${seconds(callStartedAt)}, ${describeUsage(response)}, ` +
                 `requested: ${calls.map((c) => c.name).join(", ") || "no tools"}`
             );
 
@@ -275,7 +324,7 @@ const runAgentImpl = async (
         );
         const result = readFinalAnswer(response, tracker, steps);
         if (result) {
-            console.log(`[Agent] Final answer received in ${seconds(finalStartedAt)}`);
+            console.log(`[Agent] Final answer received in ${seconds(finalStartedAt)}, ${describeUsage(response)}`);
             return result;
         }
         console.warn(

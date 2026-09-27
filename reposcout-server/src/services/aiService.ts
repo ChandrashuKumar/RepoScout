@@ -44,7 +44,7 @@ export const generateEmbedding = async (text: string) : Promise<number[]> => {
     throw new Error("Embedding model unavailable after retries");
 }
 
-const findRelevantChunks = async (question: string, repoId: string) => {
+export const findRelevantChunks = async (question: string, repoId: string) => {
     console.log(`[AI Service] Searching context for repo ${repoId}`);
 
     const questionVector = await generateEmbedding(question);

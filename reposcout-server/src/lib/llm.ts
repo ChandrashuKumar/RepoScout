@@ -17,7 +17,12 @@ export const otherProvider = (llm: LlmProvider): LlmProvider => (llm === "groq" 
 
 export const isConfigured = (llm: LlmProvider): boolean => Boolean(apiKey(llm));
 
-export const getChatModel = (llm: LlmProvider): BaseChatModel => {
+export interface ChatModelOptions {
+    // Gemini only. Lower levels answer faster; leave unset for the model's default.
+    thinkingLevel?: "low" | "medium" | "high";
+}
+
+export const getChatModel = (llm: LlmProvider, options: ChatModelOptions = {}): BaseChatModel => {
     if (llm === "groq") {
         return new ChatGroq({
             apiKey: apiKey("groq"),
@@ -32,5 +37,6 @@ export const getChatModel = (llm: LlmProvider): BaseChatModel => {
         apiKey: apiKey("gemini"),
         model: GEMINI_MODEL,
         maxRetries: MAX_RETRIES,
+        ...(options.thinkingLevel ? { thinkingLevel: options.thinkingLevel } : {}),
     });
 };

@@ -49,8 +49,35 @@ If the code does not contain the answer, say so in ${SUBMIT_ANSWER} instead of g
 
 const truncate = (text: string, max: number) => (text.length > max ? `${text.slice(0, max)}...` : text);
 
-const describeArgs = (args: Record<string, unknown>) =>
-    truncate(Object.values(args).filter((v) => v !== undefined).map(String).join(", "), 120);
+const seconds = (since: number) => `${((Date.now() - since) / 1000).toFixed(1)}s`;
+
+/** Short, readable label for a tool call, shown in the steps list. */
+const describeToolCall = (name: string, args: Record<string, any>): string => {
+    switch (name) {
+        case "searchCode": return truncate(String(args.query ?? ""), 120);
+        case "grep": return truncate(String(args.pattern ?? ""), 120);
+        case "listFiles": return args.prefix ? String(args.prefix) : "(all files)";
+        case "readFile": {
+            const range = args.startLine || args.endLine
+                ? ` lines ${args.startLine ?? 1}-${args.endLine ?? "..."}`
+                : "";
+            return `${args.path ?? ""}${range}`;
+        }
+        default: return truncate(JSON.stringify(args), 120);
+    }
+};
+
+/**
+ * The reply's visible text. Skips Gemini's thought summaries, which
+ * @langchain/google returns as text blocks marked `thought: true`.
+ */
+const messageText = (message: AIMessage): string => {
+    if (typeof message.content === "string") return message.content;
+    return message.content
+        .filter((block: any) => block.type === "text" && !block.thought && typeof block.text === "string")
+        .map((block: any) => block.text)
+        .join("");
+};
 
 const toHistoryMessages = (history: ChatTurn[]): BaseMessage[] =>
     history.slice(-MAX_HISTORY_TURNS).map((turn) => {
@@ -119,8 +146,9 @@ const readFinalAnswer = (response: AIMessage, tracker: SourceTracker, steps: Age
         if (typeof submit.args.answer === "string") return buildResult(submit.args.answer, null, tracker, steps);
     }
 
-    if (!response.tool_calls?.length && response.text.trim()) {
-        return buildResult(response.text, null, tracker, steps);
+    const text = messageText(response);
+    if (!response.tool_calls?.length && text.trim()) {
+        return buildResult(text, null, tracker, steps);
     }
 
     return null;
@@ -139,9 +167,12 @@ const runAgentImpl = async (
     const allTools = [...tools, submitAnswerTool];
     const steps: AgentStep[] = [];
 
+    // Low thinking keeps each round fast; picking the next tool rarely needs deep reasoning.
+    const makeModel = (p: LlmProvider) => getChatModel(p, { thinkingLevel: "low" }).bindTools!(allTools);
+
     let provider = toProvider(llm);
     let switched = false;
-    let model = getChatModel(provider).bindTools!(allTools);
+    let model = makeModel(provider);
 
     const base: BaseMessage[] = [
         new SystemMessage(systemPrompt(repoName)),
@@ -151,6 +182,7 @@ const runAgentImpl = async (
     // Messages produced during this run: model replies and tool results.
     let work: BaseMessage[] = [];
 
+    const startedAt = Date.now();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIME_LIMIT_MS);
 
@@ -158,10 +190,14 @@ const runAgentImpl = async (
         let rounds = 0;
         while (rounds < MAX_STEPS) {
             let response: AIMessage;
+            const callStartedAt = Date.now();
             try {
                 response = await model.invoke([...base, ...work], { signal: controller.signal });
             } catch (error) {
-                if (controller.signal.aborted) break;
+                if (controller.signal.aborted) {
+                    console.log(`[Agent] Round ${rounds + 1}: ${provider} call cancelled by time limit after ${seconds(callStartedAt)}`);
+                    break;
+                }
 
                 const fallback = otherProvider(provider);
                 if (switched || !isConfigured(fallback)) throw error;
@@ -170,7 +206,7 @@ const runAgentImpl = async (
                 work = work.length > 0 ? [toHandoffMessage(work, provider)] : [];
                 steps.push({ tool: "switchModel", input: `${provider} failed, continuing with ${fallback}` });
                 provider = fallback;
-                model = getChatModel(provider).bindTools!(allTools);
+                model = makeModel(provider);
                 switched = true;
                 continue;
             }
@@ -178,12 +214,21 @@ const runAgentImpl = async (
             rounds++;
             work.push(response);
 
+            const calls = response.tool_calls ?? [];
+            console.log(
+                `[Agent] Round ${rounds}: ${provider} took ${seconds(callStartedAt)}, ` +
+                `requested: ${calls.map((c) => c.name).join(", ") || "no tools"}`
+            );
+
             const result = readFinalAnswer(response, tracker, steps);
-            if (result) return result;
+            if (result) {
+                console.log(`[Agent] Answered after ${rounds} rounds in ${seconds(startedAt)}`);
+                return result;
+            }
 
-            for (const call of response.tool_calls ?? []) {
-                steps.push({ tool: call.name, input: describeArgs(call.args) });
-
+            // Run this round's tool calls in parallel; results are added in the order they were requested.
+            const outputs = await Promise.all(calls.map(async (call) => {
+                const toolStartedAt = Date.now();
                 const selected = toolsByName.get(call.name);
                 let output: string;
                 try {
@@ -193,9 +238,14 @@ const runAgentImpl = async (
                 } catch (error: any) {
                     output = `Error: ${error?.message ?? String(error)}`;
                 }
+                console.log(`[Agent]   ${call.name}(${describeToolCall(call.name, call.args)}) took ${seconds(toolStartedAt)}`);
+                return output;
+            }));
 
-                work.push(new ToolMessage({ content: output, tool_call_id: call.id!, name: call.name }));
-            }
+            calls.forEach((call, i) => {
+                steps.push({ tool: call.name, input: describeToolCall(call.name, call.args) });
+                work.push(new ToolMessage({ content: outputs[i], tool_call_id: call.id!, name: call.name }));
+            });
         }
     } catch (error) {
         console.error(`[Agent] ${provider} failed:`, error);
@@ -210,9 +260,10 @@ const runAgentImpl = async (
 
     // Out of rounds or time: one last call asking for an answer from what was found.
     const reason = controller.signal.aborted ? "time limit" : "step limit";
-    console.log(`[Agent] Hit ${reason}, asking for a final answer.`);
+    console.log(`[Agent] Hit ${reason} after ${seconds(startedAt)}, asking for a final answer.`);
     steps.push({ tool: "limitReached", input: reason });
 
+    const finalStartedAt = Date.now();
     try {
         const response = await model.invoke(
             [
@@ -223,9 +274,17 @@ const runAgentImpl = async (
             { signal: AbortSignal.timeout(FINAL_CALL_TIME_LIMIT_MS) }
         );
         const result = readFinalAnswer(response, tracker, steps);
-        if (result) return result;
+        if (result) {
+            console.log(`[Agent] Final answer received in ${seconds(finalStartedAt)}`);
+            return result;
+        }
+        console.warn(
+            `[Agent] Final call returned no answer after ${seconds(finalStartedAt)}. ` +
+            `Tool calls: ${(response.tool_calls ?? []).map((c) => c.name).join(", ") || "none"}, ` +
+            `text length: ${messageText(response).length}`
+        );
     } catch (error) {
-        console.error(`[Agent] Final answer call failed:`, error);
+        console.error(`[Agent] Final answer call failed after ${seconds(finalStartedAt)}:`, error);
     }
 
     return buildResult(
